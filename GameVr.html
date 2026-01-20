@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>VR_Game</title>
+  <meta name="description" content="Basic Scene with Environment - A-Frame">
+  <script src="https://aframe.io/releases/1.0.4/aframe.min.js"></script>
+  <script src="https://unpkg.com/aframe-environment-component@1.1.0/dist/aframe-environment-component.min.js"></script>
+  <style>
+    #timer {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 36px;
+      font-family: Arial, sans-serif;
+      color: #FFD700;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+      background-color: rgba(0,0,0,0.5);
+      padding: 10px 20px;
+      border-radius: 10px;
+      z-index: 1000;
+    }
+    #score {
+      position: fixed;
+      top: 80px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 24px;
+      font-family: Arial, sans-serif;
+      color: #90EE90;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+      background-color: rgba(0,0,0,0.5);
+      padding: 8px 16px;
+      border-radius: 10px;
+      z-index: 1000;
+    }
+    #gameOver {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 48px;
+      font-family: Arial, sans-serif;
+      color: #FF4444;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+      background-color: rgba(0,0,0,0.7);
+      padding: 30px;
+      border-radius: 15px;
+      text-align: center;
+      display: none;
+      z-index: 1001;
+    }
+    #restartButton {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, 50%);
+      font-size: 24px;
+      font-family: Arial, sans-serif;
+      color: white;
+      background-color: #4CAF50;
+      border: none;
+      padding: 15px 30px;
+      border-radius: 10px;
+      cursor: pointer;
+      display: none;
+      z-index: 1002;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+      transition: background-color 0.3s;
+    }
+    #restartButton:hover {
+      background-color: #45a049;
+    }
+  </style>
+</head>
+<body>
+  <div id="timer">60</div>
+  <div id="score">Собрано: 0/3</div>
+  <div id="gameOver"></div>
+  <button id="restartButton">Играть снова</button>
+
+  <a-scene environment="preset: starry; grid: none; groundTexture: walkernoise">
+    <a-plane width="3" height="3" position="0 1.3 0" color="#8B4513" rotation="-90 0 0"></a-plane>
+    <!-- Границы пространства -->  
+    <a-box color="#6B8E23" width="3" depth=".3" position="0 1.8 1.6"></a-box>
+    <a-box width="3" depth=".3" position="0 1.8 -1.6" color="#6B8E23"></a-box>
+    <a-box width="3" color="#6B8E23" depth=".3" position="1.6 1.8 0" rotation="0 90 0"></a-box>
+    <a-box width="3" color="#6B8E23" depth=".3" position="-1.6 1.8 0" rotation="0 90 0"></a-box>
+    <a-entity light="type: ambient; color: #CCC"></a-entity>
+    
+    <!--- Объекты для сбора -->
+    <!-- Тор с анимацией -->
+    <a-torus id="object1" class="collectible" position=".4 1.43 .3" radius-tubular="0.0175" radius="0.06" arc="360" color="#F5F5DC" 
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 4000"
+      animation__2="property: position; dir: alternate; loop: true; dur: 3000; to: 1 2 0; easing: easeInOutSine"
+      animation__3="property: scale; dir: alternate; loop: true; dur: 2000; to: 1.2 1.2 1.2; easing: easeInOutQuad">
+    </a-torus>
+    
+    <!-- Тетраэдр -->
+    <a-tetrahedron id="object2" class="collectible" position="-0.7 1.8 0" radius="0.15" color="#FFF"
+      animation="property: rotation; to: 0 360 0; loop: true; dur: 3000; easing: linear"
+      animation__2="property: scale; dir: alternate; loop: true; dur: 2000; to: 1.2 2.2 1.2; easing: easeInOutQuad">
+    </a-tetrahedron>
+    
+    <!-- Сфера -->
+    <a-sphere id="object3" class="collectible" position="-1 2 -1" radius=".15" color="#FF69B4"
+      animation="property: rotation; to: 360 0 0; loop: true; dur: 2500; easing: linear"
+      animation__2="property: position; dir: alternate; loop: true; dur: 3000; to: 1 2 0; easing: easeInOutSine">
+    </a-sphere>
+    
+    <a-camera>
+      <a-entity cursor="fuse: true; fuseTimeout: 500"
+                position="0 0 -0.1"
+                geometry="primitive: ring; radiusInner: 0.002; radiusOuter: 0.003"
+                material="color: #FFFFE0; shader: flat">
+      </a-entity>    
+    </a-camera>
+  </a-scene>
+
+  <script>
+    // Инициализация переменных
+    let timeLeft = 60;
+    let score = 0;
+    let totalObjects = 3;
+    let gameActive = true;
+    let timerInterval;
+    
+    // Сохраняем начальные позиции и анимации объектов
+    const objectsData = {
+      object1: {
+        position: {x: 0.4, y: 1.43, z: 0.3},
+        type: 'torus',
+        color: '#F5F5DC',
+        animations: [
+          {property: 'rotation', to: '0 360 0', loop: true, dur: 4000},
+          {property: 'position', to: '1 2 0', dir: 'alternate', loop: true, dur: 3000, easing: 'easeInOutSine'},
+          {property: 'scale', to: '1.2 1.2 1.2', dir: 'alternate', loop: true, dur: 2000, easing: 'easeInOutQuad'}
+        ]
+      },
+      object2: {
+        position: {x: -0.7, y: 1.8, z: 0},
+        type: 'tetrahedron',
+        color: '#FFF',
+        animations: [
+          {property: 'rotation', to: '0 360 0', loop: true, dur: 3000, easing: 'linear'},
+          {property: 'scale', to: '1.2 2.2 1.2', dir: 'alternate', loop: true, dur: 2000, easing: 'easeInOutQuad'}
+        ]
+      },
+      object3: {
+        position: {x: -1, y: 2, z: -1},
+        type: 'sphere',
+        color: '#FF69B4',
+        animations: [
+          {property: 'rotation', to: '360 0 0', loop: true, dur: 2500, easing: 'linear'},
+          {property: 'position', to: '1 2 0', dir: 'alternate', loop: true, dur: 3000, easing: 'easeInOutSine'}
+        ]
+      }
+    };
+    
+    // Получаем элементы DOM
+    const timerElement = document.getElementById('timer');
+    const scoreElement = document.getElementById('score');
+    const gameOverElement = document.getElementById('gameOver');
+    const restartButton = document.getElementById('restartButton');
+    
+    // Функция обновления таймера
+    function updateTimer() {
+      if (!gameActive) return;
+      
+      timeLeft--;
+      timerElement.textContent = timeLeft;
+      
+      // Меняем цвет таймера при малом времени
+      if (timeLeft <= 10) {
+        timerElement.style.color = '#FF4444';
+        timerElement.style.animation = 'pulse 0.5s infinite';
+      }
+      
+      // Конец игры при истечении времени
+      if (timeLeft <= 0) {
+        endGame(false);
+      }
+    }
+    
+    // Функция обновления счета
+    function updateScore() {
+      score++;
+      scoreElement.textContent = `Собрано: ${score}/${totalObjects}`;
+      
+      // Проверка на победу
+      if (score >= totalObjects) {
+        endGame(true);
+      }
+    }
+    
+    // Функция окончания игры
+    function endGame(isWin) {
+      gameActive = false;
+      clearInterval(timerInterval);
+      
+      if (isWin) {
+        gameOverElement.textContent = `Победа! Время: ${60 - timeLeft} сек`;
+        gameOverElement.style.color = '#90EE90';
+      } else {
+        gameOverElement.textContent = 'Время вышло!';
+        gameOverElement.style.color = '#FF4444';
+      }
+      
+      gameOverElement.style.display = 'block';
+      restartButton.style.display = 'block';
+      
+      // Делаем объекты некликабельными
+      document.querySelectorAll('.collectible').forEach(obj => {
+        obj.setAttribute('class', '');
+      });
+    }
+    
+    // Функция сбора объекта
+    function collectObject(objectId) {
+      if (!gameActive) return;
+      
+      // Находим объект
+      const object = document.getElementById(objectId);
+      if (!object || !object.classList.contains('collectible')) return;
+      
+      // Анимация сбора
+      object.setAttribute('animation', 'property: scale; to: 0 0 0; dur: 300; easing: easeInBack');
+      object.setAttribute('animation__remove', 'property: opacity; to: 0; dur: 300');
+      
+      // Удаляем класс collectible, чтобы объект больше нельзя было собирать
+      object.classList.remove('collectible');
+      
+      // Обновляем счет
+      setTimeout(() => {
+        updateScore();
+        // Скрываем объект
+        object.setAttribute('visible', 'false');
+      }, 300);
+    }
+    
+    // Функция рестарта игры
+    function restartGame() {
+      // Сбрасываем переменные
+      timeLeft = 60;
+      score = 0;
+      gameActive = true;
+      
+      // Обновляем отображение
+      timerElement.textContent = timeLeft;
+      timerElement.style.color = '#FFD700';
+      timerElement.style.animation = '';
+      scoreElement.textContent = `Собрано: ${score}/${totalObjects}`;
+      
+      // Скрываем сообщения
+      gameOverElement.style.display = 'none';
+      restartButton.style.display = 'none';
+      
+      // Восстанавливаем объекты
+      restoreObjects();
+      
+      // Запускаем таймер
+      clearInterval(timerInterval);
+      timerInterval = setInterval(updateTimer, 1000);
+    }
+    
+    // Функция восстановления объектов
+    function restoreObjects() {
+      for (const objId in objectsData) {
+        const data = objectsData[objId];
+        let object = document.getElementById(objId);
+        
+        // Если объекта нет, создаем его
+        if (!object) {
+          const scene = document.querySelector('a-scene');
+          let newElement;
+          
+          if (data.type === 'torus') {
+            newElement = document.createElement('a-torus');
+            newElement.setAttribute('radius-tubular', '0.0175');
+            newElement.setAttribute('radius', '0.06');
+            newElement.setAttribute('arc', '360');
+          } else if (data.type === 'tetrahedron') {
+            newElement = document.createElement('a-tetrahedron');
+            newElement.setAttribute('radius', '0.15');
+          } else if (data.type === 'sphere') {
+            newElement = document.createElement('a-sphere');
+            newElement.setAttribute('radius', '.15');
+          }
+          
+          newElement.setAttribute('id', objId);
+          scene.appendChild(newElement);
+          object = newElement;
+        }
+        
+        // Устанавливаем свойства объекта
+        object.setAttribute('position', `${data.position.x} ${data.position.y} ${data.position.z}`);
+        object.setAttribute('color', data.color);
+        object.setAttribute('visible', 'true');
+        object.setAttribute('class', 'collectible clickable');
+        
+        // Удаляем старые анимации
+        object.removeAttribute('animation');
+        object.removeAttribute('animation__2');
+        object.removeAttribute('animation__3');
+        object.removeAttribute('animation__remove');
+        
+        // Добавляем анимации
+        data.animations.forEach((anim, index) => {
+          const attrName = index === 0 ? 'animation' : `animation__${index + 1}`;
+          let animString = `property: ${anim.property}; to: ${anim.to}`;
+          
+          if (anim.loop) animString += `; loop: ${anim.loop}`;
+          if (anim.dur) animString += `; dur: ${anim.dur}`;
+          if (anim.easing) animString += `; easing: ${anim.easing}`;
+          if (anim.dir) animString += `; dir: ${anim.dir}`;
+          
+          object.setAttribute(attrName, animString);
+        });
+        
+        // Добавляем обработчик событий
+        object.addEventListener('click', function() {
+          collectObject(this.id);
+        });
+      }
+    }
+    
+    // Инициализация игры
+    function initGame() {
+      // Добавляем обработчики кликов для объектов
+      document.querySelectorAll('.collectible').forEach(obj => {
+        obj.addEventListener('click', function() {
+          collectObject(this.id);
+        });
+      });
+      
+      // Обработчик для кнопки рестарта
+      restartButton.addEventListener('click', restartGame);
+      
+      // Запускаем таймер
+      timerInterval = setInterval(updateTimer, 1000);
+    }
+    
+    // Запускаем игру при загрузке страницы
+    document.addEventListener('DOMContentLoaded', initGame);
+    
+    // Добавляем CSS анимацию для пульсации
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes pulse {
+        0% { opacity: 1; }
+        50% { opacity: 0.5; }
+        100% { opacity: 1; }
+      }
+      .clickable {
+        cursor: pointer;
+      }
+    `;
+    document.head.appendChild(style);
+  </script>
+</body>
+</html>
